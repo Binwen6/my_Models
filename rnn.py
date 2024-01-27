@@ -1,3 +1,4 @@
+# Accuracy: 97.41%
 # Importing necessary libraries
 import torch
 import torch.nn as nn

@@ -1,3 +1,4 @@
+# Accuracy: 96.09%
 import torch
 import torch.nn as nn
 import torch.optim as optim

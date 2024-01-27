@@ -25,4 +25,61 @@ class RNN(nn.Module):
         self.fc = nn.Linear(hidden_size, num_classes)
 
     def forward(self, x):
-        # Initialize &#8203;``【oaicite:0】``&#8203;
+        # Initialize hidden state with zeros
+        h0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size).to(x.device)
+        
+        # Forward propagate RNN
+        out, _ = self.rnn(x, h0)
+        
+        # Decode the hidden state of the last time step
+        out = self.fc(out[:, -1, :])
+        return out
+
+# 数据预处理
+transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))])
+
+# 加载数据
+train_set = datasets.MNIST(root='./data', train=True, download=True, transform=transform)
+test_set = datasets.MNIST(root='./data', train=False, download=True, transform=transform)
+
+train_loader = DataLoader(train_set, batch_size=64, shuffle=True)
+test_loader = DataLoader(test_set, batch_size=64, shuffle=False)
+
+# 创建模型实例
+model = RNN(input_size, hidden_size, num_layers, num_classes)
+
+# 定义损失函数和优化器
+criterion = nn.CrossEntropyLoss()
+optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
+
+# 训练模型
+# 训练模型
+# 训练模型
+# 训练模型
+for epoch in range(5):
+    for images, labels in train_loader:
+        optimizer.zero_grad()
+        
+        # 将图像展平成2D张量
+        images = images.view(-1, sequence_length, input_size)
+        
+        outputs = model(images)
+        loss = criterion(outputs, labels)
+        loss.backward()
+        optimizer.step()
+
+# 测试模型
+correct = 0
+total = 0
+with torch.no_grad():
+    for images, labels in test_loader:
+        
+        # 将图像展平成2D张量
+        images = images.view(-1, sequence_length, input_size)
+        
+        outputs = model(images)
+        _, predicted = torch.max(outputs.data, 1)
+        total += labels.size(0)
+        correct += (predicted == labels).sum().item()
+
+print(f'Accuracy: {100 * correct / total}%')

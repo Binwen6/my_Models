@@ -2,11 +2,11 @@
 import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LinearRegression
-from sklearn.datasets import load_boston
+from sklearn.datasets import fetch_california_housing
 from sklearn.metrics import mean_squared_error
 
 # Load dataset
-data = load_boston()
+data = fetch_california_housing()
 X = data.data
 y = data.target
 

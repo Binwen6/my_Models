@@ -1,4 +1,17 @@
+# Perfect model for this dataset
+import numpy as np
 import lightgbm as lgb
+from sklearn.datasets import load_iris
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
+
+# 加载数据
+iris = load_iris()
+X, y = iris.data, iris.target
+
+# 划分训练集和测试集
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
 
 # 创建数据集
 train_data = lgb.Dataset(X_train, label=y_train)

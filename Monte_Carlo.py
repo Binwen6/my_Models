@@ -10,5 +10,5 @@ simulated_data = np.random.normal(0, 1, n_simulations)  # 假设一个正态分�
 # 计算模拟数据的平均值
 mean_simulation = np.mean(simulated_data)
 
-mean_simulation  # 输出模拟数据的平均值
+print(mean_simulation)  # 输出模拟数据的平均值
 

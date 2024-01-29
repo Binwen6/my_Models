@@ -10,15 +10,15 @@ data = data['co2'].resample('MS').mean()
 data = data.fillna(data.bfill())
 
 # 取最后12个数据点作为测试集
-train = data[:-12]
-test = data[-12:]
+train = data[:-24]
+test = data[-24:]
 
 # 定义ARIMA模型并拟合
 model = ARIMA(train, order=(5,1,0))
 model_fit = model.fit()
 
 # 进行预测
-forecast = model_fit.forecast(steps=12)
+forecast = model_fit.forecast(steps=24)
 
 # 可视化预测结果
 plt.figure(figsize=(10, 6))

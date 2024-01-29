@@ -1,10 +1,10 @@
-from sklearn.datasets import load_boston
+from sklearn.datasets import fetch_california_housing
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error
 
 # 加载波士顿房价数据集
-boston = load_boston()
+boston = fetch_california_housing()
 X, y = boston.data, boston.target
 
 # 划分训练集和测试集
@@ -22,5 +22,5 @@ gbm.fit(X_train, y_train)
 gbm_pred = gbm.predict(X_test)
 gbm_mse = mean_squared_error(y_test, gbm_pred)
 
-rf_mse, gbm_mse  # 输出两个模型的均方误差(MSE)进行比较
+print(rf_mse, gbm_mse)  # 输出两个模型的均方误差(MSE)进行比较
 

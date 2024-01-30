@@ -9,7 +9,9 @@ from sklearn.model_selection import train_test_split
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # MNIST数据集的预处理和加载
-transform = transforms.Compose([transforms.ToTensor(),
+transform = transforms.Compose([transforms.RandomRotation(10),
+                                transforms.RandomAffine(0, shear=10, scale=(0.8, 1.2)),
+                                transforms.ToTensor(),
                                 transforms.Normalize((0.5,), (0.5,))])
 
 # 划分数据集
@@ -26,11 +28,13 @@ class LSTMNet(nn.Module):
     def __init__(self):
         super(LSTMNet, self).__init__()
         self.lstm = nn.LSTM(input_size=28, hidden_size=128, batch_first=True)
+        self.dropout = nn.Dropout(0.2)
         self.fc = nn.Linear(128, 10)
 
     def forward(self, x):
         x, _ = self.lstm(x)
         x = x[:, -1, :]
+        x = self.dropout(x)
         x = self.fc(x)
         return x
 
@@ -38,7 +42,7 @@ model = LSTMNet().to(device)
 
 # 定义损失函数和优化器
 criterion = nn.CrossEntropyLoss()
-optimizer = optim.Adam(model.parameters(), lr=0.001)
+optimizer = optim.Adam(model.parameters(), lr=0.001, weight_decay=0.001)  # 添加L2正则化项
 
 # 训练模型
 def train(model, device, train_loader, optimizer, criterion, epochs):
@@ -80,18 +84,22 @@ def evaluate(model, device, data_loader, criterion):
 
 # 测试模型
 def test(model, device, test_loader):
+    model.load_state_dict(torch.load('lstm_best_model.pt'))
     model.eval()
     correct = 0
+    total = 0
     with torch.no_grad():
         for data, target in test_loader:
             data, target = data.to(device), target.to(device)
             data = data.squeeze().view(-1, 28, 28)  # 调整数据形状以适应LSTM输入
             output = model(data)
-            pred = output.argmax(dim=1, keepdim=True)
-            correct += pred.eq(target.view_as(pred)).sum().item()
-    print(f'Test set: Accuracy: {100. * correct / len(test_loader.dataset)}%')
+            _, predicted = torch.max(output.data, 1)
+            total += target.size(0)
+            correct += (predicted == target).sum().item()
+    accuracy = 100 * correct / total
+    print(f'Test set: Accuracy: {accuracy:.2f}%')
 
-# 执行训练和测试
-epochs = 3  # 设置训练的轮数
+# 运行训练和测试
+epochs = 3
 train(model, device, train_loader, optimizer, criterion, epochs)
 test(model, device, test_loader)

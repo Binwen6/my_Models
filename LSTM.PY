@@ -1,105 +1,81 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torchvision import datasets, transforms
+from torchvision import models, datasets, transforms
 from torch.utils.data import DataLoader
-from sklearn.model_selection import train_test_split
 
 # 设置设备
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # MNIST数据集的预处理和加载
-transform = transforms.Compose([transforms.RandomRotation(10),
-                                transforms.RandomAffine(0, shear=10, scale=(0.8, 1.2)),
+transform = transforms.Compose([transforms.Resize((224, 224)),
+                                transforms.Grayscale(num_output_channels=3),  # 将灰度图像转换为RGB图像
                                 transforms.ToTensor(),
                                 transforms.Normalize((0.5,), (0.5,))])
 
-# 划分数据集
-dataset = datasets.MNIST(root='./data', train=True, download=True, transform=transform)
-train_dataset, val_dataset = train_test_split(dataset, test_size=0.2, random_state=42)
+train_dataset = datasets.MNIST(root='./data', train=True, download=True, transform=transform)
 test_dataset = datasets.MNIST(root='./data', train=False, download=True, transform=transform)
 
-train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
-val_loader = DataLoader(val_dataset, batch_size=64, shuffle=False)
-test_loader = DataLoader(test_dataset, batch_size=64, shuffle=False)
+train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
 
-# 定义LSTM模型
-class LSTMNet(nn.Module):
-    def __init__(self):
-        super(LSTMNet, self).__init__()
-        self.lstm = nn.LSTM(input_size=28, hidden_size=128, batch_first=True)
-        self.dropout = nn.Dropout(0.2)
-        self.fc = nn.Linear(128, 10)
+# 使用预训练的ResNet作为特征提取器
+model = models.resnet50(pretrained=True)
+num_features = model.fc.in_features
+model.fc = nn.Linear(num_features, 10)  # 替换分类层
+model = model.to(device)
 
-    def forward(self, x):
-        x, _ = self.lstm(x)
-        x = x[:, -1, :]
-        x = self.dropout(x)
-        x = self.fc(x)
-        return x
+# 定义优化器和学习率调整器
+optimizer = optim.AdamW(model.parameters())
+scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=3, factor=0.1)
 
-model = LSTMNet().to(device)
-
-# 定义损失函数和优化器
+# 定义损失函数
 criterion = nn.CrossEntropyLoss()
-optimizer = optim.Adam(model.parameters(), lr=0.001, weight_decay=0.001)  # 添加L2正则化项
 
 # 训练模型
-def train(model, device, train_loader, optimizer, criterion, epochs):
-    best_val_loss = float('inf')
-    for epoch in range(epochs):
-        model.train()
-        for data, target in train_loader:
-            data, target = data.to(device), target.to(device)
-            data = data.squeeze().view(-1, 28, 28)  # 调整数据形状以适应LSTM输入
-            optimizer.zero_grad()
-            output = model(data)
-            loss = criterion(output, target)
-            loss.backward()
-            optimizer.step()
-        print(f'Epoch {epoch+1}, Loss: {loss.item():.4f}')
-
-        # 在验证集上评估模型性能
-        val_loss = evaluate(model, device, val_loader, criterion)
-        print(f'Epoch {epoch+1}, Validation Loss: {val_loss:.4f}')
-
-        # 保存具有最佳验证集性能的模型权重
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
-            torch.save(model.state_dict(), 'lstm_best_model.pt')
+def train(model, device, train_loader, optimizer, criterion):
+    model.train()
+    for batch_idx, (data, target) in enumerate(train_loader):
+        data, target = data.to(device), target.to(device)
+        optimizer.zero_grad()
+        output = model(data)
+        loss = criterion(output, target)
+        loss.backward()
+        optimizer.step()
 
 # 在验证集上评估模型
 def evaluate(model, device, data_loader, criterion):
     model.eval()
     val_loss = 0
+    correct = 0
     with torch.no_grad():
         for data, target in data_loader:
             data, target = data.to(device), target.to(device)
-            data = data.squeeze().view(-1, 28, 28)  # 调整数据形状以适应LSTM输入
             output = model(data)
-            loss = criterion(output, target)
-            val_loss += loss.item() * data.size(0)
-    val_loss /= len(data_loader.dataset)
-    return val_loss
-
-# 测试模型
-def test(model, device, test_loader):
-    model.load_state_dict(torch.load('lstm_best_model.pt'))
-    model.eval()
-    correct = 0
-    total = 0
-    with torch.no_grad():
-        for data, target in test_loader:
-            data, target = data.to(device), target.to(device)
-            data = data.squeeze().view(-1, 28, 28)  # 调整数据形状以适应LSTM输入
-            output = model(data)
+            val_loss += criterion(output, target).item()
             _, predicted = torch.max(output.data, 1)
-            total += target.size(0)
             correct += (predicted == target).sum().item()
-    accuracy = 100 * correct / total
-    print(f'Test set: Accuracy: {accuracy:.2f}%')
+    val_loss /= len(data_loader.dataset)
+    accuracy = 100. * correct / len(data_loader.dataset)
+    return val_loss, accuracy
 
-# 运行训练和测试
-epochs = 3
-train(model, device, train_loader, optimizer, criterion, epochs)
-test(model, device, test_loader)
+# 训练和验证模型
+best_val_loss = float('inf')
+for epoch in range(10):
+    train(model, device, train_loader, optimizer, criterion)
+    val_loss, accuracy = evaluate(model, device, test_loader, criterion)
+    
+    # 更新学习率
+    scheduler.step(val_loss)
+    
+    # 保存具有最佳验证集性能的模型权重
+    if val_loss < best_val_loss:
+        best_val_loss = val_loss
+        torch.save(model.state_dict(), 'resnet_best_model.pt')
+
+    print(f'Epoch {epoch+1}, Validation Loss: {val_loss:.4f}, Accuracy: {accuracy:.2f}%')
+
+# 加载具有最佳验证集性能的模型权重并在测试集上进行评估
+model.load_state_dict(torch.load('resnet_best_model.pt'))
+test_loss, test_accuracy = evaluate(model, device, test_loader, criterion)
+print(f'Test Loss: {test_loss:.4f}, Test Accuracy: {test_accuracy:.2f}%')

@@ -14,9 +14,11 @@ transform = transforms.Compose([transforms.ToTensor(),
 
 # 划分数据集
 dataset = datasets.MNIST(root='./data', train=True, download=True, transform=transform)
-train_dataset, test_dataset = train_test_split(dataset, test_size=0.2, random_state=42)
+train_dataset, val_dataset = train_test_split(dataset, test_size=0.2, random_state=42)
+test_dataset = datasets.MNIST(root='./data', train=False, download=True, transform=transform)
 
 train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
+val_loader = DataLoader(val_dataset, batch_size=64, shuffle=False)
 test_loader = DataLoader(test_dataset, batch_size=64, shuffle=False)
 
 # 定义LSTM模型
@@ -40,8 +42,9 @@ optimizer = optim.Adam(model.parameters(), lr=0.001)
 
 # 训练模型
 def train(model, device, train_loader, optimizer, criterion, epochs):
-    model.train()
+    best_val_loss = float('inf')
     for epoch in range(epochs):
+        model.train()
         for data, target in train_loader:
             data, target = data.to(device), target.to(device)
             data = data.squeeze().view(-1, 28, 28)  # 调整数据形状以适应LSTM输入
@@ -51,6 +54,29 @@ def train(model, device, train_loader, optimizer, criterion, epochs):
             loss.backward()
             optimizer.step()
         print(f'Epoch {epoch+1}, Loss: {loss.item():.4f}')
+
+        # 在验证集上评估模型性能
+        val_loss = evaluate(model, device, val_loader, criterion)
+        print(f'Epoch {epoch+1}, Validation Loss: {val_loss:.4f}')
+
+        # 保存具有最佳验证集性能的模型权重
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            torch.save(model.state_dict(), 'lstm_best_model.pt')
+
+# 在验证集上评估模型
+def evaluate(model, device, data_loader, criterion):
+    model.eval()
+    val_loss = 0
+    with torch.no_grad():
+        for data, target in data_loader:
+            data, target = data.to(device), target.to(device)
+            data = data.squeeze().view(-1, 28, 28)  # 调整数据形状以适应LSTM输入
+            output = model(data)
+            loss = criterion(output, target)
+            val_loss += loss.item() * data.size(0)
+    val_loss /= len(data_loader.dataset)
+    return val_loss
 
 # 测试模型
 def test(model, device, test_loader):
